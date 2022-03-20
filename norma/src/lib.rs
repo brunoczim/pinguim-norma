@@ -1,5 +1,4 @@
 pub mod compiler;
-pub mod machine;
 pub mod interpreter;
 
 use interpreter::run_once;

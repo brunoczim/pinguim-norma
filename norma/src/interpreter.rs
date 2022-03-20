@@ -4,6 +4,7 @@
 mod test;
 
 pub mod table;
+pub mod machine;
 pub mod program;
 
 use program::{
@@ -11,7 +12,7 @@ use program::{
     TestKind,
 };
 
-use crate::machine::Machine;
+use machine::Machine;
 use num_bigint::BigUint;
 use num_traits::Zero;
 use std::{cmp::Ordering, ops::AddAssign};

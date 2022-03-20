@@ -1,11 +1,11 @@
 use super::{
+    machine::Machine,
     program::{
         Instruction, InstructionKind, Operation, OperationKind, Program, Test,
         TestKind,
     },
     Interpreter,
 };
-use crate::machine::Machine;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
