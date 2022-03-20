@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use indexmap::{set, IndexSet};
 
 #[inline(never)]
