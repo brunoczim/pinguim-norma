@@ -70,6 +70,14 @@ impl SymbolTable {
         }
     }
 
+    pub fn contains_symbol(&self, symbol: &str) -> bool {
+        self.try_symbol_to_index(symbol).is_some()
+    }
+
+    pub fn contains_index(&self, index: usize) -> bool {
+        self.try_index_to_symbol(index).is_some()
+    }
+
     pub fn iter(&self) -> Symbols {
         Symbols { iter: self.symbols.iter() }
     }
