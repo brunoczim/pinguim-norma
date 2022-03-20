@@ -50,21 +50,19 @@ fn collect_registers() {
         }),
     ));
 
-    let mut machine = Machine::new(BigUint::one());
-    program.collect_registers(|reg_name| {
-        machine.create(reg_name);
-    });
+    let mut interpreter = Interpreter::new(program);
+    interpreter.input(BigUint::one());
 
-    assert_eq!(machine.get_value("X"), BigUint::one());
-    assert_eq!(machine.get_value("Y"), BigUint::zero());
-    assert_eq!(machine.get_value("A"), BigUint::zero());
-    assert_eq!(machine.get_value("B"), BigUint::zero());
-    assert_eq!(machine.get_value("C"), BigUint::zero());
-    assert_eq!(machine.get_value("assim"), BigUint::zero());
+    let machine = interpreter.machine();
+    assert_eq!(machine.value(Machine::X_INDEX), BigUint::one());
+    assert_eq!(machine.value(Machine::Y_INDEX), BigUint::zero());
+    assert_eq!(machine.value(2), BigUint::zero());
+    assert_eq!(machine.value(3), BigUint::zero());
+    assert_eq!(machine.value(4), BigUint::zero());
+    assert_eq!(machine.value(5), BigUint::zero());
 
-    let mut names = machine.register_names().collect::<Vec<_>>();
-    names.sort();
-    assert_eq!(names, &["A", "B", "C", "X", "Y", "assim"]);
+    let names = machine.registers().map(|(name, _)| name).collect::<Vec<_>>();
+    assert_eq!(names, &["X", "Y", "A", "B", "C", "assim"]);
 }
 
 #[test]

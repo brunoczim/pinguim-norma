@@ -1,5 +1,5 @@
 use norma::{
-    compiler::{self},
+    compiler,
     interpreter::{program::Program, Interpreter},
 };
 use num_bigint::BigUint;
@@ -140,10 +140,10 @@ impl InterpreterHandle {
 
     fn export_registers(&self) -> Vec<ExportableRegister> {
         let mut registers = Vec::new();
-        for name in self.interpreter.machine().register_names() {
+        for (name, value) in self.interpreter.machine().registers() {
             registers.push(ExportableRegister {
                 name: name.to_owned(),
-                value: self.interpreter.machine().get_value(name).to_string(),
+                value: value.to_string(),
             });
         }
 

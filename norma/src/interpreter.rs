@@ -50,7 +50,8 @@ impl Interpreter {
 
         let mut machine = Machine::default();
         program.collect_registers(|reg_name| {
-            machine.create(reg_name);
+            let _result = machine
+                .try_create_register(reg_name.to_owned(), BigUint::zero());
         });
 
         Self::from_state(start, program, machine, BigUint::zero())
@@ -216,7 +217,8 @@ impl Interpreter {
     /// `1` step
     fn run_inc(&mut self, reg_name: &str) {
         self.count_steps(1u8);
-        self.machine.inc(reg_name);
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
+        self.machine.inc(reg_index);
     }
 
     /// `dec A`
@@ -224,7 +226,8 @@ impl Interpreter {
     /// `1` step
     fn run_dec(&mut self, reg_name: &str) {
         self.count_steps(1u8);
-        self.machine.dec(reg_name);
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
+        self.machine.dec(reg_index);
     }
 
     /// ```pre
@@ -236,11 +239,12 @@ impl Interpreter {
     ///
     /// `Tmp * 2 + 1` steps
     fn run_clear(&mut self, reg_name: &str) {
-        let mut steps = self.machine.get_value(reg_name);
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
+        let mut steps = self.machine.value(reg_index);
         steps *= 2u8;
         steps += 1u8;
         self.count_steps(steps);
-        self.machine.clear(reg_name);
+        self.machine.clear(reg_index);
     }
 
     /// ```pre
@@ -254,13 +258,14 @@ impl Interpreter {
     ///
     /// `Dest * 2 + 1 + N` steps
     fn run_load(&mut self, reg_name: &str, constant: &BigUint) {
-        let mut steps = self.machine.get_value(reg_name);
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
+        let mut steps = self.machine.value(reg_index);
         steps *= 2u8;
         steps += 1u8;
         steps += constant;
         self.count_steps(steps);
-        self.machine.clear(reg_name);
-        self.machine.add_const(reg_name, constant);
+        self.machine.clear(reg_index);
+        self.machine.add_const(reg_index, constant);
     }
 
     /// ```pre
@@ -274,8 +279,9 @@ impl Interpreter {
     ///
     /// `N` steps
     fn run_add_const(&mut self, reg_name: &str, constant: &BigUint) {
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
         self.count_steps(constant);
-        self.machine.add_const(reg_name, constant);
+        self.machine.add_const(reg_index, constant);
     }
 
     /// ```pre
@@ -298,16 +304,20 @@ impl Interpreter {
     ///
     /// `Tmp * 2 + Src * 7 + 3` steps
     fn run_add(&mut self, reg_dest: &str, reg_src: &str, reg_tmp: &str) {
-        let mut tmp_steps = self.machine.get_value(reg_src);
+        let dest_index =
+            self.machine.register_table().symbol_to_index(reg_dest);
+        let tmp_index = self.machine.register_table().symbol_to_index(reg_tmp);
+        let src_index = self.machine.register_table().symbol_to_index(reg_src);
+        let mut tmp_steps = self.machine.value(tmp_index);
         tmp_steps *= 2u8;
 
-        let mut steps = self.machine.get_value(reg_src);
+        let mut steps = self.machine.value(src_index);
         steps *= 7u8;
         steps += tmp_steps;
         steps += 3u8;
         self.count_steps(steps);
 
-        self.machine.add(reg_dest, reg_src, reg_tmp);
+        self.machine.add(dest_index, src_index, tmp_index);
     }
 
     /// ```pre
@@ -321,8 +331,9 @@ impl Interpreter {
     ///
     /// `N` steps
     fn run_sub_const(&mut self, reg_name: &str, constant: &BigUint) {
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
         self.count_steps(constant);
-        self.machine.sub_const(reg_name, constant);
+        self.machine.sub_const(reg_index, constant);
     }
 
     /// ```pre
@@ -345,16 +356,20 @@ impl Interpreter {
     ///
     /// `Tmp * 2 + Src * 7 + 3` steps
     fn run_sub(&mut self, reg_dest: &str, reg_src: &str, reg_tmp: &str) {
-        let mut tmp_steps = self.machine.get_value(reg_src);
+        let dest_index =
+            self.machine.register_table().symbol_to_index(reg_dest);
+        let tmp_index = self.machine.register_table().symbol_to_index(reg_tmp);
+        let src_index = self.machine.register_table().symbol_to_index(reg_src);
+        let mut tmp_steps = self.machine.value(tmp_index);
         tmp_steps *= 2u8;
 
-        let mut steps = self.machine.get_value(reg_src);
+        let mut steps = self.machine.value(src_index);
         steps *= 7u8;
         steps += tmp_steps;
         steps += 3u8;
         self.count_steps(steps);
 
-        self.machine.sub(reg_dest, reg_src, reg_tmp);
+        self.machine.sub(dest_index, src_index, tmp_index);
     }
 
     /// `zero A`
@@ -362,7 +377,8 @@ impl Interpreter {
     /// `1` step
     fn test_zero(&mut self, reg_name: &str) -> bool {
         self.count_steps(1u8);
-        self.machine.is_zero(reg_name)
+        let reg_index = self.machine.register_table().symbol_to_index(reg_name);
+        self.machine.is_zero(reg_index)
     }
 
     /// ```pre
@@ -392,10 +408,11 @@ impl Interpreter {
         register: &str,
         constant: &BigUint,
     ) -> bool {
-        let ordering = self.machine.cmp_const(register, constant);
+        let reg_index = self.machine.register_table().symbol_to_index(register);
+        let ordering = self.machine.cmp_const(reg_index, constant);
 
         let mut steps = if ordering <= Ordering::Equal {
-            self.machine.get_value(register)
+            self.machine.value(reg_index)
         } else {
             constant.clone()
         };
@@ -440,13 +457,18 @@ impl Interpreter {
         reg_right: &str,
         reg_tmp: &str,
     ) -> bool {
-        let ordering = self.machine.cmp(reg_left, reg_right, reg_tmp);
+        let left_index =
+            self.machine.register_table().symbol_to_index(reg_left);
+        let right_index =
+            self.machine.register_table().symbol_to_index(reg_right);
+        let tmp_index = self.machine.register_table().symbol_to_index(reg_tmp);
+        let ordering = self.machine.cmp(left_index, right_index, tmp_index);
 
-        let mut tmp_steps = self.machine.get_value(reg_tmp);
+        let mut tmp_steps = self.machine.value(tmp_index);
         tmp_steps *= 2u8;
         let minimum =
-            if ordering <= Ordering::Equal { reg_left } else { reg_right };
-        let mut steps = self.machine.get_value(minimum);
+            if ordering <= Ordering::Equal { left_index } else { right_index };
+        let mut steps = self.machine.value(minimum);
 
         steps *= 9u8;
         steps += tmp_steps;
@@ -483,10 +505,11 @@ impl Interpreter {
         register: &str,
         constant: &BigUint,
     ) -> bool {
-        let ordering = self.machine.cmp_const(register, constant);
+        let reg_index = self.machine.register_table().symbol_to_index(register);
+        let ordering = self.machine.cmp_const(reg_index, constant);
 
         let mut steps = if ordering < Ordering::Equal {
-            self.machine.get_value(register)
+            self.machine.value(reg_index)
         } else {
             constant - 1u8
         };
@@ -531,13 +554,18 @@ impl Interpreter {
         reg_right: &str,
         reg_tmp: &str,
     ) -> bool {
-        let ordering = self.machine.cmp(reg_left, reg_right, reg_tmp);
+        let left_index =
+            self.machine.register_table().symbol_to_index(reg_left);
+        let right_index =
+            self.machine.register_table().symbol_to_index(reg_right);
+        let tmp_index = self.machine.register_table().symbol_to_index(reg_tmp);
+        let ordering = self.machine.cmp(left_index, right_index, tmp_index);
 
-        let mut tmp_steps = self.machine.get_value(reg_tmp);
+        let mut tmp_steps = self.machine.value(tmp_index);
         tmp_steps *= 2u8;
         let minimum =
-            if ordering <= Ordering::Equal { reg_left } else { reg_right };
-        let mut steps = self.machine.get_value(minimum);
+            if ordering <= Ordering::Equal { left_index } else { right_index };
+        let mut steps = self.machine.value(minimum);
 
         steps *= 9u8;
         steps += tmp_steps;
