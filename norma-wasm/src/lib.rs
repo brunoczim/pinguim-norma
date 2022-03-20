@@ -1,6 +1,10 @@
 use norma::{
     compiler,
-    interpreter::{program::Program, Interpreter},
+    interpreter::{
+        program::{self, Program},
+        table::SymbolTable,
+        Interpreter,
+    },
 };
 use num_bigint::BigUint;
 use pinguim_language::{
@@ -162,10 +166,15 @@ impl InterpreterHandle {
 
     fn export_instructions(&self) -> Vec<ExportableInstruction> {
         let mut instructions = Vec::new();
+        let context = program::display::InstrContext {
+            register_table: self.interpreter.machine().register_table(),
+            // TODO
+            label_table: &SymbolTable::empty(),
+        };
         for instruction in self.interpreter.program().instructions() {
             instructions.push(ExportableInstruction {
                 label: instruction.label().to_owned(),
-                kind: instruction.kind.to_string(),
+                kind: context.display(instruction.kind.clone()).to_string(),
             });
         }
         instructions

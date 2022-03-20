@@ -1,8 +1,11 @@
 //! Este módulo exporta itens necessários para construir um programa da norma.
 
+pub mod display;
+
 use indexmap::{map, IndexMap};
 use num_bigint::BigUint;
-use std::fmt;
+
+use super::table::SymbolTable;
 
 /// Um programa da Norma.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,17 +109,16 @@ impl Program {
     /// Exporta todas as instruções do programa para serem usadas com JS, no
     /// formato `(label, instruction-data)`. TODO: substituir tuplas por um tipo
     /// próprio da comunicação.
-    pub fn export(&self) -> Vec<(String, String)> {
-        self.instructions().map(Instruction::export).collect()
-    }
-}
-
-impl fmt::Display for Program {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        for instruction in self.instructions.values() {
-            write!(fmtr, "{}\n", instruction)?;
-        }
-        Ok(())
+    pub fn export(
+        &self,
+        register_table: &SymbolTable,
+    ) -> Vec<(String, String)> {
+        let context = display::InstrContext {
+            register_table,
+            // TODO
+            label_table: &SymbolTable::empty(),
+        };
+        self.instructions().map(|instr| instr.export(context)).collect()
     }
 }
 
@@ -212,8 +214,8 @@ impl Instruction {
     /// Exporta essa instrução para ser usada com JS, no formato `(label,
     /// instruction-data)`. TODO: substituir tuplas por um tipo próprio da
     /// comunicação.
-    pub fn export(&self) -> (String, String) {
-        (self.label.clone(), self.kind.to_string())
+    pub fn export(&self, context: display::InstrContext) -> (String, String) {
+        (self.label.clone(), context.display(self.kind.clone()).to_string())
     }
 
     /// Coleta todos os rótulos usados nessa instrução, usando uma função
@@ -235,12 +237,6 @@ impl Instruction {
     }
 }
 
-impl fmt::Display for Instruction {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmtr, "{}: {}", self.label, self.kind)
-    }
-}
-
 /// Um tipo específico de instrução.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstructionKind {
@@ -248,15 +244,6 @@ pub enum InstructionKind {
     Operation(Operation),
     /// Um instrução de teste.
     Test(Test),
-}
-
-impl fmt::Display for InstructionKind {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            InstructionKind::Operation(oper) => write!(fmtr, "{}", oper),
-            InstructionKind::Test(test) => write!(fmtr, "{}", test),
-        }
-    }
 }
 
 impl InstructionKind {
@@ -311,12 +298,6 @@ pub struct Operation {
     pub kind: OperationKind,
     /// O rótulo da pŕoxima instrução.
     pub next: String,
-}
-
-impl fmt::Display for Operation {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmtr, "do {} goto {}", self.kind, self.next)
-    }
 }
 
 impl Operation {
@@ -448,33 +429,6 @@ impl OperationKind {
     }
 }
 
-impl fmt::Display for OperationKind {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OperationKind::Inc(register) => write!(fmtr, "inc {}", register),
-            OperationKind::Dec(register) => write!(fmtr, "dec {}", register),
-            OperationKind::Clear(register) => {
-                write!(fmtr, "clear ({})", register)
-            }
-            OperationKind::Load(register, constant) => {
-                write!(fmtr, "load ({}, {})", register, constant)
-            }
-            OperationKind::AddConst(register, constant) => {
-                write!(fmtr, "add ({}, {})", register, constant)
-            }
-            OperationKind::Add(reg_src, reg_dest, reg_tmp) => {
-                write!(fmtr, "add ({}, {}, {})", reg_src, reg_dest, reg_tmp)
-            }
-            OperationKind::SubConst(register, constant) => {
-                write!(fmtr, "sub ({}, {})", register, constant)
-            }
-            OperationKind::Sub(reg_src, reg_dest, reg_tmp) => {
-                write!(fmtr, "sub ({}, {}, {})", reg_src, reg_dest, reg_tmp)
-            }
-        }
-    }
-}
-
 /// Dados de uma instrução de teste.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Test {
@@ -484,16 +438,6 @@ pub struct Test {
     pub next_then: String,
     /// O rótulo da próxima instrução caso seja falso.
     pub next_else: String,
-}
-
-impl fmt::Display for Test {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            fmtr,
-            "if {} then goto {} else goto {}",
-            self.kind, self.next_then, self.next_else
-        )
-    }
 }
 
 impl Test {
@@ -595,34 +539,6 @@ impl TestKind {
                 collector(left);
                 collector(right);
                 collector(temp);
-            }
-        }
-    }
-}
-
-impl fmt::Display for TestKind {
-    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TestKind::Zero(register) => write!(fmtr, "zero {}", register),
-            TestKind::EqualsConst(register, constant) => {
-                write!(fmtr, "equals ({}, {})", register, constant)
-            }
-            TestKind::Equals(reg_left, reg_right, reg_tmp) => {
-                write!(
-                    fmtr,
-                    "equals ({}, {}, {})",
-                    reg_left, reg_right, reg_tmp
-                )
-            }
-            TestKind::LessThanConst(register, constant) => {
-                write!(fmtr, "lessThan ({}, {})", register, constant)
-            }
-            TestKind::LessThan(reg_left, reg_right, reg_tmp) => {
-                write!(
-                    fmtr,
-                    "lessThan ({}, {}, {})",
-                    reg_left, reg_right, reg_tmp
-                )
             }
         }
     }
