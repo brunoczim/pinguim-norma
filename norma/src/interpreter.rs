@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+pub mod table;
 pub mod program;
 
 use program::{
