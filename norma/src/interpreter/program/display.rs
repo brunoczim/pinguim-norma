@@ -19,7 +19,7 @@ impl<'regs, 'prog> fmt::Display for ProgramDisplayer<'regs, 'prog> {
             label_table: &SymbolTable::empty(),
         };
         for instruction in self.target.instructions.values() {
-            write!(fmtr, "{}\n", context.display(instruction.clone()))?;
+            write!(fmtr, "{}\n", context.display(instruction))?;
         }
         Ok(())
     }
@@ -32,35 +32,41 @@ pub struct InstrContext<'regs, 'labels> {
 }
 
 impl<'regs, 'labels> InstrContext<'regs, 'labels> {
-    pub fn display<T>(self, target: T) -> InstrDisplayer<'regs, 'labels, T> {
+    pub fn display<'target, T>(
+        self,
+        target: &'target T,
+    ) -> InstrDisplayer<'regs, 'labels, 'target, T> {
         InstrDisplayer { target, context: self }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InstrDisplayer<'regs, 'labels, T> {
-    pub target: T,
+pub struct InstrDisplayer<'regs, 'labels, 'target, T>
+where
+    T: ?Sized,
+{
+    pub target: &'target T,
     pub context: InstrContext<'regs, 'labels>,
 }
 
-impl<'regs, 'labels> fmt::Display
-    for InstrDisplayer<'regs, 'labels, Instruction>
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, Instruction>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmtr,
             "{}: {}",
             self.target.label,
-            self.context.display(self.target.kind.clone())
+            self.context.display(&self.target.kind)
         )
     }
 }
 
-impl<'regs, 'labels> fmt::Display
-    for InstrDisplayer<'regs, 'labels, InstructionKind>
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, InstructionKind>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
-        match self.target.clone() {
+        match &self.target {
             InstructionKind::Operation(oper) => {
                 write!(fmtr, "{}", self.context.display(oper))
             }
@@ -71,21 +77,21 @@ impl<'regs, 'labels> fmt::Display
     }
 }
 
-impl<'regs, 'labels> fmt::Display
-    for InstrDisplayer<'regs, 'labels, Operation>
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, Operation>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmtr,
             "do {} goto {}",
-            self.context.display(self.target.kind.clone()),
+            self.context.display(&self.target.kind),
             self.target.next,
         )
     }
 }
 
-impl<'regs, 'labels> fmt::Display
-    for InstrDisplayer<'regs, 'labels, OperationKind>
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, OperationKind>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         match self.target.clone() {
@@ -113,19 +119,23 @@ impl<'regs, 'labels> fmt::Display
     }
 }
 
-impl<'regs, 'labels> fmt::Display for InstrDisplayer<'regs, 'labels, Test> {
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, Test>
+{
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmtr,
             "if {} then goto {} else goto {}",
-            self.context.display(self.target.kind.clone()),
+            self.context.display(&self.target.kind),
             self.target.next_then,
             self.target.next_else
         )
     }
 }
 
-impl<'regs, 'labels> fmt::Display for InstrDisplayer<'regs, 'labels, TestKind> {
+impl<'regs, 'labels, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'target, TestKind>
+{
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         match self.target.clone() {
             TestKind::Zero(register) => write!(fmtr, "zero {}", register),

@@ -215,7 +215,7 @@ impl Instruction {
     /// instruction-data)`. TODO: substituir tuplas por um tipo próprio da
     /// comunicação.
     pub fn export(&self, context: display::InstrContext) -> (String, String) {
-        (self.label.clone(), context.display(self.kind.clone()).to_string())
+        (self.label.clone(), context.display(&self.kind).to_string())
     }
 
     /// Coleta todos os rótulos usados nessa instrução, usando uma função

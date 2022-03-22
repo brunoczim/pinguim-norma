@@ -174,7 +174,7 @@ impl InterpreterHandle {
         for instruction in self.interpreter.program().instructions() {
             instructions.push(ExportableInstruction {
                 label: instruction.label().to_owned(),
-                kind: context.display(instruction.kind.clone()).to_string(),
+                kind: context.display(&instruction.kind).to_string(),
             });
         }
         instructions
