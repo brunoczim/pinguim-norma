@@ -7,6 +7,30 @@ use num_bigint::BigUint;
 use num_traits::identities::Zero;
 use std::{cmp::Ordering, slice};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RegisterId {
+    pub index: usize,
+}
+
+impl RegisterId {
+    pub const X: Self = Self { index: 0 };
+    pub const Y: Self = Self { index: 1 };
+}
+
+impl From<usize> for RegisterId {
+    fn from(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl From<RegisterId> for usize {
+    fn from(id: RegisterId) -> Self {
+        id.index
+    }
+}
+
+pub type RegisterTable = SymbolTable<String, RegisterId>;
+
 #[cold]
 #[inline(never)]
 fn inconsistent_register_table() -> ! {
@@ -83,7 +107,7 @@ impl Register {
 /// Banco de registradores da Norma.
 #[derive(Debug, Clone)]
 pub struct Machine {
-    register_table: SymbolTable,
+    register_table: RegisterTable,
     registers: Vec<Register>,
 }
 
@@ -95,20 +119,17 @@ impl Default for Machine {
 }
 
 impl Machine {
-    pub const X_INDEX: usize = 0;
-    pub const Y_INDEX: usize = 1;
-
     /// Inicia um novo banco de regitradores com 2 registradores básicos (X e Y)
     /// e inicia contador: X: Registrador de entrada, receberá o valor
     /// desejado Y: Registrador de saída, armazenará o valor retornado ao fim
     /// da execução
     pub fn new(input: BigUint) -> Machine {
         let mut this = Self {
-            register_table: SymbolTable::empty(),
+            register_table: RegisterTable::empty(),
             registers: Vec::new(),
         };
-        assert_eq!(this.create_register("X", input), Self::X_INDEX);
-        assert_eq!(this.create_register("Y", BigUint::zero()), Self::Y_INDEX);
+        assert_eq!(this.create_register("X", input), RegisterId::X);
+        assert_eq!(this.create_register("Y", BigUint::zero()), RegisterId::Y);
         this
     }
 
@@ -116,22 +137,26 @@ impl Machine {
         &mut self,
         name: String,
         data: BigUint,
-    ) -> Result<usize, usize> {
-        let index = self.register_table.try_create(name)?;
+    ) -> Result<RegisterId, RegisterId> {
+        let id = self.register_table.try_create(name)?;
         self.registers.push(Register::new(data));
-        Ok(index)
+        Ok(id)
     }
 
-    pub fn create_register(&mut self, name: &str, data: BigUint) -> usize {
-        let index = self.register_table.create(name);
+    pub fn create_register(&mut self, name: &str, data: BigUint) -> RegisterId {
+        let id = self.register_table.create(name);
         self.registers.push(Register::new(data));
-        index
+        id
     }
 
-    pub fn insert_register(&mut self, name: String, data: BigUint) -> usize {
-        let index = self.register_table.insert(name);
-        self.registers.insert(index, Register::new(data));
-        index
+    pub fn insert_register(
+        &mut self,
+        name: String,
+        data: BigUint,
+    ) -> RegisterId {
+        let id = self.register_table.insert(name);
+        self.registers.insert(id.index, Register::new(data));
+        id
     }
 
     pub fn registers(&self) -> Registers {
@@ -141,18 +166,18 @@ impl Machine {
         }
     }
 
-    pub fn register_table(&self) -> &SymbolTable {
+    pub fn register_table(&self) -> &RegisterTable {
         &self.register_table
     }
 
     /// Define o valor de entrada (AKA valor do registrador X).
     pub fn input(&mut self, data: BigUint) {
-        self.registers[Self::X_INDEX].set_value(data);
+        self.register_mut(RegisterId::X).set_value(data);
     }
 
     /// Pega o valor de saída (AKA valor do registrador Y).
     pub fn output(&self) -> BigUint {
-        self.registers[Self::Y_INDEX].value()
+        self.value(RegisterId::Y)
     }
 
     /// Retorna se o registrador de dado nome já existe.
@@ -171,25 +196,25 @@ impl Machine {
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn clear(&mut self, reg_index: usize) {
-        self.registers[reg_index].clear();
+    pub fn clear(&mut self, reg_id: RegisterId) {
+        self.register_mut(reg_id).clear();
     }
 
     /// Incrementa o valor de um registrador existente com nome `reg_name`.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn inc(&mut self, reg_index: usize) {
-        self.registers[reg_index].inc();
+    pub fn inc(&mut self, reg_id: RegisterId) {
+        self.register_mut(reg_id).inc();
     }
 
-    /// Decrementa o valor de um registrador existente com nome `reg_index`.
+    /// Decrementa o valor de um registrador existente com nome `reg_id`.
     /// Satura em zero.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn dec(&mut self, reg_index: usize) {
-        self.registers[reg_index].dec();
+    pub fn dec(&mut self, reg_id: RegisterId) {
+        self.register_mut(reg_id).dec();
     }
 
     /// Performa uma adição entre registradores.
@@ -201,19 +226,19 @@ impl Machine {
     /// # Panics
     /// Invoca `panic!` se qualquer um dos registradores `dest`, `src` ou `tmp`
     /// não existir.
-    pub fn add(&mut self, dest: usize, src: usize, tmp: usize) {
+    pub fn add(&mut self, dest: RegisterId, src: RegisterId, tmp: RegisterId) {
         let operand = self.value(src);
-        self.registers[dest].add(&operand);
-        self.registers[tmp].clear();
+        self.register_mut(dest).add(&operand);
+        self.register_mut(tmp).clear();
     }
 
     /// Soma uma constante `constant` ao valor de um registrador existente com
-    /// nome `reg_index`. Satura em zero.
+    /// nome `reg_id`. Satura em zero.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn add_const(&mut self, reg_index: usize, constant: &BigUint) {
-        self.registers[reg_index].add(constant);
+    pub fn add_const(&mut self, reg_id: RegisterId, constant: &BigUint) {
+        self.register_mut(reg_id).add(constant);
     }
 
     /// Performa uma subtração entre registradores.
@@ -225,19 +250,19 @@ impl Machine {
     /// # Panics
     /// Invoca `panic!` se qualquer um dos registradores `dest`, `src` ou `tmp`
     /// não existir.
-    pub fn sub(&mut self, dest: usize, src: usize, tmp: usize) {
+    pub fn sub(&mut self, dest: RegisterId, src: RegisterId, tmp: RegisterId) {
         let operand = self.value(src);
-        self.registers[dest].sub(&operand);
-        self.registers[tmp].clear();
+        self.register_mut(dest).sub(&operand);
+        self.register_mut(tmp).clear();
     }
 
     /// Subtrai uma constante `constant` do valor de um registrador existente
-    /// com nome `reg_index`. Satura em zero.
+    /// com nome `reg_id`. Satura em zero.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn sub_const(&mut self, reg_index: usize, constant: &BigUint) {
-        self.registers[reg_index].sub(constant);
+    pub fn sub_const(&mut self, reg_id: RegisterId, constant: &BigUint) {
+        self.register_mut(reg_id).sub(constant);
     }
 
     /// Performa uma comparação entre registradores.
@@ -251,42 +276,50 @@ impl Machine {
     /// `tmp` não existir.
     pub fn cmp(
         &mut self,
-        reg_left: usize,
-        reg_right: usize,
-        reg_tmp: usize,
+        reg_left: RegisterId,
+        reg_right: RegisterId,
+        reg_tmp: RegisterId,
     ) -> Ordering {
-        self.registers[reg_tmp].clear();
-        self.registers[reg_left].cmp(&self.registers[reg_right].value)
+        self.register_mut(reg_tmp).clear();
+        self.register(reg_left).cmp(&self.register(reg_right).value)
     }
 
-    /// Compara o valor do registrador existente de nome `reg_index` a uma
-    /// constante `constant` com nome `reg_index`. Retorna se é menor, igual
+    /// Compara o valor do registrador existente de nome `reg_id` a uma
+    /// constante `constant` com nome `reg_id`. Retorna se é menor, igual
     /// ou maior à constante.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
     pub fn cmp_const(
         &mut self,
-        reg_index: usize,
+        reg_id: RegisterId,
         constant: &BigUint,
     ) -> Ordering {
-        self.registers[reg_index].cmp(constant)
+        self.register(reg_id).cmp(constant)
     }
 
-    /// Testa se o valor do registrador existente de nome `reg_index` é zero.
+    /// Testa se o valor do registrador existente de nome `reg_id` é zero.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn is_zero(&self, reg_index: usize) -> bool {
-        self.registers[reg_index].is_zero()
+    pub fn is_zero(&self, reg_id: RegisterId) -> bool {
+        self.register(reg_id).is_zero()
     }
 
     /// Retorna o valor de um registrador existente pela sua chave.
     ///
     /// # Panics
     /// Invoca `panic!` se o registrador não existir.
-    pub fn value(&self, reg_index: usize) -> BigUint {
-        self.registers[reg_index].value()
+    pub fn value(&self, reg_id: RegisterId) -> BigUint {
+        self.register(reg_id).value()
+    }
+
+    fn register(&self, reg_id: RegisterId) -> &Register {
+        &self.registers[reg_id.index]
+    }
+
+    fn register_mut(&mut self, reg_id: RegisterId) -> &mut Register {
+        &mut self.registers[reg_id.index]
     }
 
     /// Exporta os registradores em um mapa de
@@ -294,23 +327,25 @@ impl Machine {
     /// string, para ser exibido em front-end.
     pub fn export_registers(&mut self) -> IndexMap<String, String> {
         self.registers()
-            .map(|(name, data)| (name.to_owned(), data.to_string()))
+            .map(|(name, _, data)| (name.to_owned(), data.to_string()))
             .collect()
     }
 }
 
 #[derive(Debug)]
 pub struct Registers<'machine> {
-    names: table::Symbols<'machine>,
+    names: table::Symbols<'machine, String, RegisterId>,
     data: slice::Iter<'machine, Register>,
 }
 
 impl<'machine> Iterator for Registers<'machine> {
-    type Item = (&'machine str, BigUint);
+    type Item = (&'machine str, RegisterId, BigUint);
 
     fn next(&mut self) -> Option<Self::Item> {
         match (self.names.next(), self.data.next()) {
-            (Some(name), Some(register)) => Some((name, register.value())),
+            (Some((name, id)), Some(register)) => {
+                Some((name.as_str(), id, register.value()))
+            }
             (None, None) => None,
             _ => inconsistent_register_table(),
         }

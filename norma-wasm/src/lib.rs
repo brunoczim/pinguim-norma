@@ -1,8 +1,7 @@
 use norma::{
     compiler,
     interpreter::{
-        program::{self, Program},
-        table::SymbolTable,
+        program::{self, ConstantTable, LabelTable, Program},
         Interpreter,
     },
 };
@@ -144,7 +143,7 @@ impl InterpreterHandle {
 
     fn export_registers(&self) -> Vec<ExportableRegister> {
         let mut registers = Vec::new();
-        for (name, value) in self.interpreter.machine().registers() {
+        for (name, _, value) in self.interpreter.machine().registers() {
             registers.push(ExportableRegister {
                 name: name.to_owned(),
                 value: value.to_string(),
@@ -169,7 +168,8 @@ impl InterpreterHandle {
         let context = program::display::InstrContext {
             register_table: self.interpreter.machine().register_table(),
             // TODO
-            label_table: &SymbolTable::empty(),
+            label_table: &LabelTable::empty(),
+            constant_table: &ConstantTable::empty(),
         };
         for instruction in self.interpreter.program().instructions() {
             instructions.push(ExportableInstruction {

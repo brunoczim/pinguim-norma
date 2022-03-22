@@ -2,10 +2,47 @@
 
 pub mod display;
 
+use crate::interpreter::{machine::RegisterTable, table::SymbolTable};
 use indexmap::{map, IndexMap};
 use num_bigint::BigUint;
 
-use super::table::SymbolTable;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LabelId {
+    pub index: usize,
+}
+
+impl From<usize> for LabelId {
+    fn from(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl From<LabelId> for usize {
+    fn from(id: LabelId) -> Self {
+        id.index
+    }
+}
+
+pub type LabelTable = SymbolTable<String, LabelId>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ConstantId {
+    pub index: usize,
+}
+
+impl From<usize> for ConstantId {
+    fn from(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl From<ConstantId> for usize {
+    fn from(id: ConstantId) -> Self {
+        id.index
+    }
+}
+
+pub type ConstantTable = SymbolTable<BigUint, ConstantId>;
 
 /// Um programa da Norma.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,12 +148,13 @@ impl Program {
     /// próprio da comunicação.
     pub fn export(
         &self,
-        register_table: &SymbolTable,
+        register_table: &RegisterTable,
     ) -> Vec<(String, String)> {
         let context = display::InstrContext {
             register_table,
             // TODO
-            label_table: &SymbolTable::empty(),
+            label_table: &LabelTable::empty(),
+            constant_table: &ConstantTable::empty(),
         };
         self.instructions().map(|instr| instr.export(context)).collect()
     }

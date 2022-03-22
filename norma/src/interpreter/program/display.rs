@@ -2,13 +2,16 @@ use super::{
     Instruction, InstructionKind, Operation, OperationKind, Program, Test,
     TestKind,
 };
-use crate::interpreter::table::SymbolTable;
+use crate::interpreter::machine::{RegisterId, RegisterTable};
+use crate::interpreter::program::{
+    ConstantId, ConstantTable, LabelId, LabelTable,
+};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProgramDisplayer<'regs, 'prog> {
     pub target: &'prog Program,
-    pub register_table: &'regs SymbolTable,
+    pub register_table: &'regs RegisterTable,
 }
 
 impl<'regs, 'prog> fmt::Display for ProgramDisplayer<'regs, 'prog> {
@@ -16,7 +19,8 @@ impl<'regs, 'prog> fmt::Display for ProgramDisplayer<'regs, 'prog> {
         let context = InstrContext {
             register_table: self.register_table,
             // TODO
-            label_table: &SymbolTable::empty(),
+            label_table: &LabelTable::empty(),
+            constant_table: &ConstantTable::empty(),
         };
         for instruction in self.target.instructions.values() {
             write!(fmtr, "{}\n", context.display(instruction))?;
@@ -26,39 +30,64 @@ impl<'regs, 'prog> fmt::Display for ProgramDisplayer<'regs, 'prog> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InstrContext<'regs, 'labels> {
-    pub register_table: &'regs SymbolTable,
-    pub label_table: &'labels SymbolTable,
+pub struct InstrContext<'regs, 'labels, 'consts> {
+    pub register_table: &'regs RegisterTable,
+    pub label_table: &'labels LabelTable,
+    pub constant_table: &'consts ConstantTable,
 }
 
-impl<'regs, 'labels> InstrContext<'regs, 'labels> {
+impl<'regs, 'labels, 'consts> InstrContext<'regs, 'labels, 'consts> {
     pub fn display<'target, T>(
         self,
         target: &'target T,
-    ) -> InstrDisplayer<'regs, 'labels, 'target, T> {
+    ) -> InstrDisplayer<'regs, 'labels, 'consts, 'target, T> {
         InstrDisplayer { target, context: self }
-    }
-
-    pub fn register(self, index: usize) -> &'regs str {
-        self.register_table.try_index_to_symbol(index).unwrap_or("?")
-    }
-
-    pub fn label(self, index: usize) -> &'labels str {
-        self.label_table.try_index_to_symbol(index).unwrap_or("?")
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InstrDisplayer<'regs, 'labels, 'target, T>
+pub struct InstrDisplayer<'regs, 'labels, 'consts, 'target, T>
 where
     T: ?Sized,
 {
     pub target: &'target T,
-    pub context: InstrContext<'regs, 'labels>,
+    pub context: InstrContext<'regs, 'labels, 'consts>,
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, Instruction>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, RegisterId>
+{
+    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmtr,
+            "{}",
+            self.context.register_table.id_to_symbol(*self.target)
+        )
+    }
+}
+
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, LabelId>
+{
+    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmtr, "{}", self.context.label_table.id_to_symbol(*self.target))
+    }
+}
+
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, ConstantId>
+{
+    fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmtr,
+            "{}",
+            self.context.constant_table.id_to_symbol(*self.target)
+        )
+    }
+}
+
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, Instruction>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -70,8 +99,8 @@ impl<'regs, 'labels, 'target> fmt::Display
     }
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, InstructionKind>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, InstructionKind>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         match &self.target {
@@ -85,8 +114,8 @@ impl<'regs, 'labels, 'target> fmt::Display
     }
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, Operation>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, Operation>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -98,8 +127,8 @@ impl<'regs, 'labels, 'target> fmt::Display
     }
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, OperationKind>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, OperationKind>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         match self.target.clone() {
@@ -127,8 +156,8 @@ impl<'regs, 'labels, 'target> fmt::Display
     }
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, Test>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, Test>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -141,8 +170,8 @@ impl<'regs, 'labels, 'target> fmt::Display
     }
 }
 
-impl<'regs, 'labels, 'target> fmt::Display
-    for InstrDisplayer<'regs, 'labels, 'target, TestKind>
+impl<'regs, 'labels, 'consts, 'target> fmt::Display
+    for InstrDisplayer<'regs, 'labels, 'consts, 'target, TestKind>
 {
     fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
         match self.target.clone() {
