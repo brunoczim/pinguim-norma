@@ -1,5 +1,5 @@
 use super::{
-    machine::Machine,
+    machine::RegisterId,
     program::{
         Instruction, InstructionKind, Operation, OperationKind, Program, Test,
         TestKind,
@@ -54,15 +54,25 @@ fn collect_registers() {
     interpreter.input(BigUint::one());
 
     let machine = interpreter.machine();
-    assert_eq!(machine.value(Machine::X_INDEX), BigUint::one());
-    assert_eq!(machine.value(Machine::Y_INDEX), BigUint::zero());
-    assert_eq!(machine.value(2), BigUint::zero());
-    assert_eq!(machine.value(3), BigUint::zero());
-    assert_eq!(machine.value(4), BigUint::zero());
-    assert_eq!(machine.value(5), BigUint::zero());
+    assert_eq!(machine.value(RegisterId::X), BigUint::one());
+    assert_eq!(machine.value(RegisterId::Y), BigUint::zero());
+    assert_eq!(machine.value(RegisterId { index: 2 }), BigUint::zero());
+    assert_eq!(machine.value(RegisterId { index: 3 }), BigUint::zero());
+    assert_eq!(machine.value(RegisterId { index: 4 }), BigUint::zero());
+    assert_eq!(machine.value(RegisterId { index: 5 }), BigUint::zero());
 
-    let names = machine.registers().map(|(name, _)| name).collect::<Vec<_>>();
-    assert_eq!(names, &["X", "Y", "A", "B", "C", "assim"]);
+    let names = machine.registers().collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        &[
+            ("X", RegisterId::X, BigUint::one()),
+            ("Y", RegisterId::Y, BigUint::zero()),
+            ("A", RegisterId { index: 2 }, BigUint::zero()),
+            ("B", RegisterId { index: 3 }, BigUint::zero()),
+            ("C", RegisterId { index: 4 }, BigUint::zero()),
+            ("assim", RegisterId { index: 5 }, BigUint::zero()),
+        ]
+    );
 }
 
 #[test]
