@@ -38,6 +38,14 @@ impl<'regs, 'labels> InstrContext<'regs, 'labels> {
     ) -> InstrDisplayer<'regs, 'labels, 'target, T> {
         InstrDisplayer { target, context: self }
     }
+
+    pub fn register(self, index: usize) -> &'regs str {
+        self.register_table.try_index_to_symbol(index).unwrap_or("?")
+    }
+
+    pub fn label(self, index: usize) -> &'labels str {
+        self.label_table.try_index_to_symbol(index).unwrap_or("?")
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
